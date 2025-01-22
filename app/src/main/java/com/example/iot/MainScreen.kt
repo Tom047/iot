@@ -1,11 +1,6 @@
 package com.example.iot
 
-import android.Manifest
 import android.bluetooth.BluetoothDevice
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -27,7 +22,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,9 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.example.iot.models.Note
 import kotlinx.coroutines.launch
 
@@ -56,34 +48,6 @@ fun MainScreen(bluetoothHelper: BluetoothHelper) {
     var selectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
     //var isConnected by remember { mutableStateOf(false) }
     val isConnected by bluetoothHelper.isConnected.collectAsState()
-
-    // Request multiple permissions if needed (e.g. for scanning, location, connect).
-//    val neededPermissions = mutableListOf(
-//        Manifest.permission.BLUETOOTH_CONNECT,
-//        Manifest.permission.BLUETOOTH_SCAN,
-//        Manifest.permission.ACCESS_FINE_LOCATION
-//    ).filter {
-//        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S || // For newer versions
-//                ContextCompat.checkSelfPermission(
-//                    LocalContext.current, it
-//                ) != PackageManager.PERMISSION_GRANTED
-//    }.toTypedArray()
-
-//    val permissionsLauncher = rememberLauncherForActivityResult(
-//        ActivityResultContracts.RequestMultiplePermissions()
-//    ) { permissionsGranted ->
-//        // Once user responds to the permissions, proceed if granted
-//        if (permissionsGranted.values.all { it }) {
-//            bluetoothHelper.startScanning()
-//        }
-//    }
-
-    // On first composition, request permissions if needed
-//    LaunchedEffect(key1 = "permissions") {
-//        if (neededPermissions.isNotEmpty()) {
-//            permissionsLauncher.launch(neededPermissions)
-//        }
-//    }
 
     // A list of notes for demonstration
     val availableNotes = listOf(

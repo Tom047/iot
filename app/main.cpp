@@ -10,17 +10,19 @@
 #include <cstring>
 
 using namespace std::literals::chrono_literals;
-
+// Create a local PwmOut so we don't block BLE stack.
 PwmOut buzzer(D6);
+DigitalOut yellow(D2);
+DigitalOut green(D5);
+DigitalOut red(D4);
 
 class NoteService : public ble::GattServer::EventHandler {
 public:
     static constexpr size_t BUFFER_SIZE = 20;
 
-    // Updated properties to include NOTIFY
-    // (WRITE | WRITE_WITHOUT_RESPONSE | NOTIFY)
+
     NoteService() :
-            _noteChar(
+            _note_char(
                     /* Char UUID */ "485f4145-52b9-4644-af1f-7a6b9322490f",
                                     _noteBuffer,
                                     BUFFER_SIZE,
@@ -29,14 +31,14 @@ public:
                                     GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_WRITE_WITHOUT_RESPONSE |
                                     GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_NOTIFY
             ),
-            _noteService(
-                    "51311102-030e-485f-b122-f8f381aa84ed",
-                    _noteCharArray,
-                    1
+            _note_service(
+                    /* Service UUID */ "51311102-030e-485f-b122-f8f381aa84ed",
+                                       _note_char_array,
+                                       1
             )
     {
-        _noteCharArray[0] = &_noteChar;
-        _noteChar.setWriteAuthorizationCallback(this, &NoteService::authorizeWrite);
+        _note_char_array[0] = &_note_char;
+        _note_char.setWriteAuthorizationCallback(this, &NoteService::authorizeWrite);
     }
 
     void start(BLE &ble, events::EventQueue &event_queue)
@@ -44,17 +46,15 @@ public:
         _server = &ble.gattServer();
         _event_queue = &event_queue;
 
-        printf("Registering NoteService...\r\n");
-        ble_error_t err = _server->addService(_noteService);
+        printf("Registering Note Service...\r\n");
+        ble_error_t err = _server->addService(_note_service);
         if (err) {
             printf("Error %u during addService.\r\n", err);
             return;
         }
-        _server->setEventHandler(this);
-        printf("NoteService registered.\r\n");
 
-        // Replay stored notes every 2 seconds
-        _event_queue->call_every(2s, callback(this, &NoteService::periodicPlayback));
+        _server->setEventHandler(this);
+        printf("Note Service registered.\r\n");
     }
 
 private:
@@ -62,23 +62,23 @@ private:
 
     void onDataWritten(const GattWriteCallbackParams &params) override
     {
-        if (params.handle == _noteChar.getValueHandle()) {
+        if (params.handle == _note_char.getValueHandle()) {
             printf("Note data received (len=%u): ", params.len);
             for (size_t i = 0; i < params.len; i++) {
                 printf("%02X ", params.data[i]);
             }
             printf("\r\n");
 
-            // Store data for future playback
+            // Store the data so we can play it periodically
             _seqLen = params.len > BUFFER_SIZE ? BUFFER_SIZE : params.len;
             memcpy(_seqData, params.data, _seqLen);
+
+            playStoredNotes();
         }
     }
 
-    // For demonstration: We'll notify the phone each time we begin playback
     void onDataSent(const GattDataSentCallbackParams &params) override
     {
-        // If we used notify below, we get here after sending
         printf("Notification data was sent.\r\n");
     }
 
@@ -93,33 +93,49 @@ private:
 
     // =============== Playback Logic ===============
 
-    void periodicPlayback()
+    void playStoredNotes()
     {
         if (_seqLen == 0) {
-            return; // no notes
+            return; // no notes stored
         }
+
         printf("Playing stored sequence (len=%u)\r\n", _seqLen);
-
-        // **Send a notification** to the phone that we are about to play
-        // The data can be anything, e.g. a timestamp or "playing" info
-        sendNotifyPayload();
-
-        // Actually play the notes
         playNotes(_seqData, _seqLen);
     }
 
     void playNotes(const uint8_t *data, size_t len)
     {
+        printf("playnotes funcion\r\n");
+
         for (size_t i = 0; i < len; i++) {
             float freq = noteToFreq(data[i]);
             printf("  Note %u -> %.2f Hz\r\n", data[i], freq);
 
             buzzer.period(1.0f / freq);
             buzzer.write(0.5f);
-            ThisThread::sleep_for(200ms);
+            if (data[i] % 3 == 0) {
+                red=1;
+            } else if (data[i] % 2  == 0) {
+                green=1;
+            } else {
+                yellow=1;
+            }
+
+            // Generate a random delay between 50ms and 400ms
+            int randomDelay = rand() % 351 + 50;  // Random number between 50 and 400
+
+            ThisThread::sleep_for(randomDelay);  // Delay based on random value
 
             buzzer.write(0.0f);
-            ThisThread::sleep_for(50ms);
+
+
+            // Generate another random delay for the silence
+            randomDelay = rand() % 351 + 50;
+
+            ThisThread::sleep_for(randomDelay);  // Delay based on random value
+            yellow = 0;
+            red = 0;
+            green = 0;
         }
     }
 
@@ -130,43 +146,22 @@ private:
         return cFreq * powf(2.0f, offset / 12.0f);
     }
 
-    // Send a small notify with dummy data (e.g. 0x01).
-    void sendNotifyPayload()
-    {
-        // If no clients have subscribed, GattServer::write() returns an error
-        // but that’s harmless. We'll try to notify anyway.
-        const uint8_t dummyData[1] = { 0x01 };
-
-        ble_error_t err = _server->write(
-                _noteChar.getValueHandle(),
-                dummyData,
-                sizeof(dummyData),
-                false // localOnly=false => notify subscribed clients
-        );
-
-        if (err) {
-            printf("Notify write error: %u\r\n", err);
-        }
-    }
-
     // =============== Private Members ===============
-    static constexpr size_t BUFFER_SIZE = 20;
-    GattCharacteristic _noteChar;
-    GattCharacteristic *_noteCharArray[1];
-    GattService        _noteService;
+
+    GattService        _note_service;
+    GattCharacteristic _note_char;
+    GattCharacteristic *_note_char_array[1];
 
     ble::GattServer   *_server = nullptr;
     events::EventQueue *_event_queue = nullptr;
 
-    // Sequence buffer
-    uint8_t _noteBuffer[BUFFER_SIZE] = {0};
-    uint8_t _seqData[BUFFER_SIZE]    = {0};
-    size_t  _seqLen                  = 0;
+    // Sequence storage
+    uint8_t _noteBuffer[BUFFER_SIZE] = {0}; // for the characteristic value
+    uint8_t _seqData[BUFFER_SIZE]    = {0}; // user data buffer
+    size_t  _seqLen                  = 0;   // actual data length
 };
 
 // main.cpp
-#include "mbed.h"
-
 int main()
 {
     mbed_trace_init();

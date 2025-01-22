@@ -52,14 +52,6 @@ class BluetoothHelper(private val context: Context) {
         return bluetoothAdapter?.isEnabled == true
     }
 
-    /**
-     * Old function
-     */
-    @SuppressLint("MissingPermission")
-    fun getPairedDevices(): Set<BluetoothDevice> {
-        return bluetoothAdapter?.bondedDevices ?: emptySet()
-    }
-
     fun startScanning() {
         try {
             val bluetoothManager =
@@ -92,12 +84,6 @@ class BluetoothHelper(private val context: Context) {
         }
     }
 
-    fun getScannedDevices(): List<BluetoothDevice> {
-        return devices
-            .distinctBy { it.address }
-            .sortedBy { it.address }
-    }
-
     // GATT Connect method (asynchronous!)
     @SuppressLint("MissingPermission")
     fun connect(device: BluetoothDevice) {
@@ -126,7 +112,6 @@ class BluetoothHelper(private val context: Context) {
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.d("BLE", "Services discovered.")
-                // TODO: Find your service and characteristic here
                 val myService = gatt.getService(MY_SERVICE_UUID)
                 if (myService != null) {
                     writeCharacteristic = myService.getCharacteristic(MY_CHARACTERISTIC_UUID)
@@ -163,7 +148,7 @@ class BluetoothHelper(private val context: Context) {
     /**
      * Send data by writing it into the discovered characteristic.
      */
-    @SuppressLint("MissingPermission")
+    @SuppressLint("MissingPermission", "NewApi")
     suspend fun sendData(data: ByteArray) = withContext(Dispatchers.IO) {
         val gatt = bluetoothGatt ?: run {
             Log.e("BLE", "BluetoothGatt is null")
